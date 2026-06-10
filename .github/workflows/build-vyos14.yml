@@ -6,11 +6,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    # ▼▼ 添加下面两行环境变量，强制使用 Node.js 24 ▼▼
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    # ▲▲ 以上为新增内容 ▲▲
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: equuleus              # 1.4 LTS 分支
+          ref: equuleus
 
       - name: Build ISO and QCOW2
         run: |
@@ -27,7 +31,6 @@ jobs:
 
       - name: Patch QCOW2 for eNSP Pro compatibility
         run: |
-          # 查找生成的 qcow2 文件
           QCOW2_FILE=$(ls build/*.qcow2 | head -1)
           if [ -z "$QCOW2_FILE" ]; then
             echo "No QCOW2 file found!"
@@ -35,16 +38,11 @@ jobs:
           fi
           echo "Patching $QCOW2_FILE"
 
-          # 使用 guestfish 修改 /boot/grub/grub.cfg
           guestfish --rw -a "$QCOW2_FILE" <<'EOF'
             run
             mount /dev/sda1 /
-            # 替换 console=ttyS0 为 console=tty0
             sed -i 's/console=ttyS0/console=tty0/g' /boot/grub/grub.cfg
-            # 在 GRUB_CMDLINE_LINUX_DEFAULT 行追加网卡命名参数
             sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/ s/"$/ net.ifnames=0 biosdevname=0"/' /etc/default/grub
-            # 如果未找到该文件，则直接修改 grub.cfg 中的 linux 命令行（某些版本可能没有 /etc/default/grub）
-            # 确保每个 linux 行末尾都有 net.ifnames=0 biosdevname=0
             sed -i '/linux / s/$/ net.ifnames=0 biosdevname=0/' /boot/grub/grub.cfg
             exit
           EOF
